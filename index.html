@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Candy Hotel</title>
+<style>
+  body {
+    margin: 0;
+    background: #f7c6e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: Arial, sans-serif;
+  }
+
+  .game {
+    width: 400px;
+    height: 300px;
+    background: #ffe6f2;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Rooms */
+  .room { position: absolute; inset: 0; padding: 16px; box-sizing: border-box; display: none; border: 6px solid #c26aa0; }
+  .room.active { display: block; }
+  .room1 { background: linear-gradient(#ffd6eb, #ffc1e0); border-right: none; }
+  .room2 { background: linear-gradient(#ffe0f0, #ffd0ea); border-left: none; border-right: none; }
+  .room3 { background: linear-gradient(#ffd6eb, #ffbfe0); border-left: none; }
+
+  /* Furniture / Props */
+  .desk { position:absolute; bottom:130px; left:80px; width:240px; height:40px; background:#b565a7; border:4px solid #7a2e5f; border-radius:8px; }
+  .bell { position:absolute; top:6px; left:110px; width:14px; height:10px; background:gold; border-radius:50%; }
+
+  .couch { position:absolute; bottom:20px; left:20px; width:140px; height:40px; background:#ff9fd6; border:4px solid #c26aa0; border-radius:20px; }
+  .chair { width:26px; height:26px; background:#ffb3e6; border:3px solid #c26aa0; border-radius:6px; position:absolute; }
+  .table { width:28px; height:28px; background:#fff; border:3px solid #c26aa0; border-radius:50%; position:absolute; transform: rotate(45deg); }
+
+  .door { width:42px; height:64px; background:#a0522d; border:4px solid #5c2e14; position:absolute; text-align:center; font-size:10px; color:#fff; }
+
+  /* Player */
+  .player { position:absolute; width:32px; height:48px; }
+  .head { width:28px; height:28px; background:#f2c9a0; border-radius:50%; position:absolute; top:0; left:2px; border:3px solid #8b5a2b; }
+  .hair { position:absolute; top:-4px; left:-2px; width:32px; height:18px; background:#9c4a2f; border-radius:50% 50% 40% 40%; }
+  .bun { position:absolute; top:-8px; left:18px; width:12px; height:12px; background:#9c4a2f; border-radius:50%; }
+  .body { position:absolute; top:28px; left:0; width:32px; height:20px; background:#6b7cff; border-radius:6px; border:3px solid #3540a3; }
+
+  /* Map pickup */
+  .map { position:absolute; top:120px; right:10px; width:26px; height:18px; background:#fffbe0; border:3px solid #444; box-shadow: inset 0 0 0 2px #d6c27a; cursor:pointer; }
+  .map::after { content:""; position:absolute; left:4px; top:3px; width:14px; height:10px; background: repeating-linear-gradient(90deg,#ccc 0,#ccc 2px,#eee 2px,#eee 4px); }
+
+  .ui { position:absolute; top:8px; left:8px; background:#fff; padding:4px 8px; border-radius:6px; font-size:12px; }
+  .hint { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); font-size:11px; color:#444; }
+</style>
+</head>
+<body>
+
+<div class="game">
+  <div class="ui" id="ui">Move with WASD →</div>
+  <div class="hint">Walk to the screen edge to change rooms</div>
+
+  <!-- ROOM 1 -->
+  <div class="room room1 active">
+    <div class="desk"><div class="bell"></div></div>
+  </div>
+
+  <!-- ROOM 2 -->
+  <div class="room room2">
+    <div class="couch"></div>
+    <div class="chair" style="left:180px; bottom:20px"></div>
+    <div class="chair" style="left:240px; bottom:20px"></div>
+    <div class="table" style="left:210px; bottom:40px"></div>
+  </div>
+
+  <!-- ROOM 3 -->
+  <div class="room room3">
+    <!-- Top doors -->
+    <div class="door" style="top:20px; left:60px">101</div>
+    <div class="door" style="top:20px; left:160px">103</div>
+    <div class="door" style="top:20px; left:260px">105</div>
+    <!-- Bottom doors -->
+    <div class="door" style="bottom:20px; left:60px">102</div>
+    <div class="door" style="bottom:20px; left:160px">104</div>
+    <div class="door" style="bottom:20px; left:260px">106</div>
+
+    <div class="map" id="map"></div>
+  </div>
+
+  <!-- Player -->
+  <div class="player" id="player">
+    <div class="head"><div class="hair"></div><div class="bun"></div></div>
+    <div class="body"></div>
+  </div>
+</div>
+
+<script>
+const player = document.getElementById('player');
+const rooms = document.querySelectorAll('.room');
+const map = document.getElementById('map');
+const ui = document.getElementById('ui');
+
+let roomIndex = 0;
+let x = 20, y = 20;
+const speed = 2.2;
+const keys = {};
+
+const colliders = {
+  0: [{x:80,y:130,w:240,h:40}],
+  1: [
+    {x:30,y:20,w:140,h:40},
+    {x:180,y:20,w:26,h:26},
+    {x:240,y:20,w:26,h:26},
+    {x:210,y:40,w:28,h:28}
+  ],
+  2: [
+    {x:60,y:230,w:42,h:64}, {x:160,y:230,w:42,h:64}, {x:260,y:230,w:42,h:64},
+    {x:60,y:0,w:42,h:64}, {x:160,y:0,w:42,h:64}, {x:260,y:0,w:42,h:64}
+  ]
+};
+
+document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+function collides(nx, ny) {
+  return colliders[roomIndex].some(c =>
+    nx < c.x + c.w && nx + 32 > c.x && ny < c.y + c.h && ny + 48 > c.y
+  );
+}
+
+function gameLoop() {
+  let nx = x, ny = y;
+  if(keys.w) ny += speed;
+  if(keys.s) ny -= speed;
+  if(keys.a) nx -= speed;
+  if(keys.d) nx += speed;
+
+  if(!collides(nx, ny)) { x = nx; y = ny; }
+
+  if(x < 0) switchRoom(-1);
+  if(x > 368) switchRoom(1);
+
+  x = Math.max(0, Math.min(368, x));
+  y = Math.max(20, Math.min(200, y));
+
+  player.style.left = x + 'px';
+  player.style.bottom = y + 'px';
+
+  requestAnimationFrame(gameLoop);
+}
+
+function switchRoom(dir) {
+  const next = roomIndex + dir;
+  if(next < 0 || next >= rooms.length) return;
+  rooms[roomIndex].classList.remove('active');
+  roomIndex = next;
+  rooms[roomIndex].classList.add('active');
+  // Enter at horizontal edge of screen depending on direction, vertical center
+  x = dir > 0 ? 20 : 350;
+  y = 120;
+}
+
+map.addEventListener('click', () => {
+  if(roomIndex === 2 && map.style.display !== 'none') {
+    map.style.display = 'none';
+    ui.textContent = 'You picked up the map!';
+  }
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>
